@@ -3,48 +3,38 @@ name: Azure Boards Gateway
 on:
   workflow_dispatch:
     inputs:
-      event_type:
-        description: "Type of automation"
-        required: true
-        type: string
-      ticket:
-        description: "Ticket ID (CLOUD-123)"
-        required: true
-        type: string
-      prefix:
-        description: "feature / bugfix / hotfix / chore"
-        required: true
-        type: string
-      title:
-        description: "Work item title"
-        required: true
+      dummy:
+        description: "Dummy input"
+        required: false
         type: string
 
 jobs:
-  dispatch:
+  gateway:
     runs-on: ubuntu-latest
-    steps:
-      - name: Forward to repository_dispatch
-        run: |
-          echo "Forwarding to repository_dispatch"
 
-          # Construimos el JSON final
+    steps:
+      - name: Extract Azure Boards Payload
+        run: |
+          echo "Extracting payload from event.json"
+          cat $GITHUB_EVENT_PATH
+
+          # Work Item ID
+          ID=$(jq -r '.resource.id' $GITHUB_EVENT_PATH)
+          TITLE=$(jq -r '.resource.fields["System.Title"]' $GITHUB_EVENT_PATH)
+          TYPE=$(jq -r '.resource.fields["System.WorkItemType"]' $GITHUB_EVENT_PATH)
+
+          # Logic to pick prefix
+          if [[ "$TYPE" == "Bug" ]]; then PREFIX="bugfix"
+          else PREFIX="feature"
+          fi
+
           cat <<EOF > payload.json
           {
-            "event_type": "${{ github.event.inputs.event_type }}",
+            "event_type": "create-branch",
             "client_payload": {
-              "prefix": "${{ github.event.inputs.prefix }}",
-              "ticket": "${{ github.event.inputs.ticket }}",
-              "title": "${{ github.event.inputs.title }}"
+              "prefix": "${PREFIX}",
+              "ticket": "CLOUD-${ID}",
+              "title": "${TITLE}"
             }
           }
           EOF
-
-          echo "Sending:"
-          cat payload.json
-
-          curl -X POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            https://api.github.com/repos/JulioQes/POC-LAUREATE-BOARD/dispatches \
-            -d @payload.json
