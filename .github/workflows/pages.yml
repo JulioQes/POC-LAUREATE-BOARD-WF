@@ -1,8 +1,9 @@
- name: GitHub Pages Functions
+name: GitHub Pages Functions
 
 on:
   push:
-    branches: ["main"]
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -13,15 +14,13 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Pages
+      - name: Setup GitHub Pages
         uses: actions/configure-pages@v5
 
-      # Upload ONLY the functions folder
       - name: Upload Functions to Pages
         uses: actions/upload-pages-artifact@v3
         with:
@@ -30,7 +29,6 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
-
     steps:
       - name: Deploy to GitHub Pages 🚀
         uses: actions/deploy-pages@v4
