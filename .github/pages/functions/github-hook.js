@@ -1,14 +1,6 @@
-// ===========================
-// GET → Para pruebas
-// ===========================
 export async function onRequestGet(context) {
   return new Response(
-    JSON.stringify({
-      status: "OK",
-      message: "GitHub Pages Function is LIVE",
-      usage: "Send POST requests to trigger the workflow",
-      endpoint: context.request.url
-    }),
+    JSON.stringify({ ok: true, message: "Function GET active" }, null, 2),
     {
       status: 200,
       headers: { "Content-Type": "application/json" }
@@ -16,20 +8,16 @@ export async function onRequestGet(context) {
   );
 }
 
-
-// ===========================
-// POST → Dispara GitHub Actions (workflow_dispatch)
-// ===========================
 export async function onRequestPost(context) {
   try {
-    const bodyText = await context.request.text();
+    const request = context.request;
+    const rawBody = await request.text();
 
-    // Endpoint de GitHub Actions
-    const githubWorkflowURL =
+    // GitHub Workflow Dispatch
+    const url =
       "https://api.github.com/repos/JulioQes/POC-LAUREATE-BOARD/actions/workflows/gateway.yml/dispatches";
 
-    // Llamada a GitHub Actions workflow_dispatch
-    const response = await fetch(githubWorkflowURL, {
+    const response = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -39,28 +27,24 @@ export async function onRequestPost(context) {
       },
       body: JSON.stringify({
         event_type: "azure-devops-event",
-        client_payload: { body: bodyText || "no-body" }
+        client_payload: { body: rawBody }
       })
     });
 
     const result = await response.text();
 
-    return new Response(
-      JSON.stringify({
-        ok: response.ok,
-        status: response.status,
-        github_response: result
-      }),
-      { status: response.status, headers: { "Content-Type": "application/json" } }
-    );
+    return new Response(result, {
+      status: response.status,
+      headers: { "Content-Type": "application/json" }
+    });
 
-  } catch (error) {
+  } catch (err) {
     return new Response(
-      JSON.stringify({
-        error: true,
-        message: error.message || "Unknown error in function"
-      }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
+      JSON.stringify({ error: err.message }),
+      {
+        status: 500,
+        headers: { "Content-Type": "application/json" }
+      }
     );
   }
 }
