@@ -13,7 +13,6 @@ export async function onRequestPost(context) {
     const request = context.request;
     const rawBody = await request.text();
 
-    // GitHub Workflow Dispatch
     const url =
       "https://api.github.com/repos/JulioQes/POC-LAUREATE-BOARD/actions/workflows/gateway.yml/dispatches";
 
@@ -21,8 +20,8 @@ export async function onRequestPost(context) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Accept": "application/vnd.github+json",
-        "Authorization": `Bearer ${context.env.GH_PAT}`,
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${context.env.GH_PAT}`,
         "User-Agent": "GitHubPagesFunction"
       },
       body: JSON.stringify({
@@ -37,7 +36,6 @@ export async function onRequestPost(context) {
       status: response.status,
       headers: { "Content-Type": "application/json" }
     });
-
   } catch (err) {
     return new Response(
       JSON.stringify({ error: err.message }),
