@@ -21,10 +21,10 @@ jobs:
       - name: Setup GitHub Pages
         uses: actions/configure-pages@v5
 
-      - name: Upload Functions to Pages
+      - name: Upload full Pages directory
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ".github/pages/functions"
+          path: ".github/pages"
 
   deploy:
     needs: build
