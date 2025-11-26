@@ -5,7 +5,7 @@ on:
     types: [labeled]
 
 jobs:
-  create_and_link_branch:
+  create_branch_and_pr:
     runs-on: ubuntu-latest
 
     if: |
@@ -13,6 +13,7 @@ jobs:
       contains(toJson(github.event.issue.labels.*.name), 'FE')
 
     steps:
+
       ###############################################################
       # STEP 1 — CREATE BRANCH + EMPTY COMMIT
       ###############################################################
@@ -25,7 +26,6 @@ jobs:
             const owner = 'JulioQes';
             const baseBranch = 'main';
 
-            // Identify BE or FE
             const labels = context.payload.issue.labels.map(l => l.name);
             const issueNumber = context.payload.issue.number;
 
@@ -57,7 +57,7 @@ jobs:
 
             const mainSha = ref.data.object.sha;
 
-            // 2 — Get commit info for main
+            // 2 — Get commit info
             const commit = await github.rest.git.getCommit({
               owner,
               repo: targetRepo,
@@ -92,36 +92,74 @@ jobs:
               force: true
             });
 
-            // Outputs
+            // Save outputs
             core.setOutput('targetrepo', targetRepo);
             core.setOutput('branchname', newBranchName);
+            core.setOutput('commitsha', emptyCommit.data.sha);
 
 
       ###############################################################
-      # STEP 2 — LINK BRANCH TO ISSUE (appears under Development)
+      # STEP 2 — CREATE THE PR USING THE EMPTY COMMIT
       ###############################################################
-      - name: Link branch to Issue
+      - name: Create PR (Draft) with empty commit
+        id: create_pr
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GH_PAT }}
           script: |
+            const owner = "JulioQes";
             const issueNumber = context.payload.issue.number;
-            const owner = 'JulioQes';
-            const targetRepo = process.env.TARGET;
+
+            const targetRepo = process.env.REPO;
             const branchName = process.env.BRANCH;
 
-            // LINK DEVELOPMENT RESOURCE (branch -> Issue)
-            // This works because repos are part of same Project V2
+            // Create PR
+            const pr = await github.rest.pulls.create({
+              owner,
+              repo: targetRepo,
+              title: `WIP: Start work for Issue #${issueNumber}`,
+              head: branchName,
+              base: "main",
+              draft: true,
+              body:
+                `Automatically initialized branch for Issue #${issueNumber}\n\n` +
+                `Fixes ${context.repo.owner}/${context.repo.repo}#${issueNumber}`
+            });
+
+            core.setOutput("pr_url", pr.data.html_url);
+        env:
+          REPO: ${{ steps.create_branch.outputs.targetrepo }}
+          BRANCH: ${{ steps.create_branch.outputs.branchname }}
+
+
+      ###############################################################
+      # STEP 3 — POST COMMENT IN ORIGINAL ISSUE (it links PR/branch)
+      ###############################################################
+      - name: Comment in Issue (link PR + branch)
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GH_PAT }}
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            const issueNumber = context.payload.issue.number;
+            const targetRepo = process.env.REPO;
+            const branchName = process.env.BRANCH;
+            const prUrl = process.env.PR;
+
             await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
+              owner,
+              repo,
               issue_number: issueNumber,
               body:
-                `✅ **Branch created & linked automatically!**\n\n` +
+                `🚀 **Branch & PR created automatically!**\n\n` +
                 `**Repository:** \`${owner}/${targetRepo}\`\n` +
-                `**Branch:** \`${branchName}\`\n\n` +
-                `This branch will now appear under **Development**.`
+                `**Branch:** \`${branchName}\`\n` +
+                `**Pull Request:** ${prUrl}\n\n` +
+                `This PR is linked to the Issue and now visible under **Development**.`
             });
         env:
-          TARGET: ${{ steps.create_branch.outputs.targetrepo }}
+          REPO: ${{ steps.create_branch.outputs.targetrepo }}
           BRANCH: ${{ steps.create_branch.outputs.branchname }}
+          PR: ${{ steps.create_pr.outputs.pr_url }}
