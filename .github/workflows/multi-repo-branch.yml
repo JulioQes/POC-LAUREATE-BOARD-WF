@@ -21,7 +21,7 @@ jobs:
             const owner = 'JulioQes';
             const baseBranch = 'main';
 
-            // ----- 1. Determine BE or FE -----
+            // Identify BE or FE
             const labels = context.payload.issue.labels.map(label => label.name);
             const issueNumber = context.payload.issue.number;
             const issueTitle = context.payload.issue.title
@@ -46,9 +46,8 @@ jobs:
 
             const newBranchName = `${branchPrefix}issue-${issueNumber}-${issueTitle}`;
 
-
             try {
-              // ----- 2. Get SHA of main branch in BE/FE -----
+              // Get SHA of main in BE/FE repo
               const { data: refData } = await github.rest.git.getRef({
                 owner,
                 repo: targetRepo,
@@ -57,8 +56,7 @@ jobs:
 
               const sha = refData.object.sha;
 
-
-              // ----- 3. Create the new branch in BE/FE -----
+              // Create the branch
               await github.rest.git.createRef({
                 owner,
                 repo: targetRepo,
@@ -66,33 +64,26 @@ jobs:
                 sha
               });
 
-
-              // ----- 4. LINK BRANCH TO THE ORIGINAL ISSUE (REAL MAGIC) -----
-              // Works only because WF + BE + FE repos are tied into the same Project V2.
+              // Link branch to WF Issue (cross-repo allowed in Project V2)
               await github.rest.repos.createOrUpdateIssueBranch({
-                owner,                 // repo where the BRANCH lives
-                repo: targetRepo,      // BE/FE repo
-                issue_number: issueNumber,   // Issue in WF repo
+                owner,
+                repo: targetRepo,
+                issue_number: issueNumber,
                 head_branch: newBranchName
               });
 
-
-              // ----- 5. Add comment to original Issue -----
+              // Comment on the Issue
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: issueNumber,
-                body: `
- **Branch created & linked automatically!**
+                body: `✅ **Branch created & linked automatically!**
 
-**Repository:** \`${owner}/${targetRepo}\`  
+**Repository:** \`${owner}/${targetRepo}\`
 **Branch:** \`${newBranchName}\`
 
-This branch is now associated with this Issue under **Development**.
-You may begin implementing changes on this branch.
-                `
+This branch is now associated with this Issue under **Development**.`
               });
-
 
             } catch (error) {
               core.setFailed(error.message);
@@ -101,10 +92,8 @@ You may begin implementing changes on this branch.
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: issueNumber,
-                body: `
- **Error creating or linking branch**
+                body: `⚠️ **Error creating or linking branch**
 
-\`${error.message}\`
-                `
+\`${error.message}\``
               });
             }
