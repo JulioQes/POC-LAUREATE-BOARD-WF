@@ -5,7 +5,7 @@ on:
     types: [labeled]
 
 jobs:
-  create_cross_repo_branch:
+  create_and_link_branch:
     runs-on: ubuntu-latest
 
     if: |
@@ -13,7 +13,12 @@ jobs:
       contains(toJson(github.event.issue.labels.*.name), 'FE')
 
     steps:
-      - name: Create Branch in Target Repo + Link to Issue
+
+      ##########################################################
+      # STEP 1 — CREATE BRANCH IN TARGET REPO (BE/FE)
+      ##########################################################
+      - name: Create branch in BE/FE repo
+        id: create_branch
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GH_PAT }}
@@ -21,7 +26,7 @@ jobs:
             const owner = 'JulioQes';
             const baseBranch = 'main';
 
-            // Identify BE or FE
+            // Identify BE/FE
             const labels = context.payload.issue.labels.map(label => label.name);
             const issueNumber = context.payload.issue.number;
             const issueTitle = context.payload.issue.title
@@ -39,35 +44,65 @@ jobs:
             } else if (labels.includes('FE')) {
               targetRepo = 'POC-LAUREATE-BOARD-FE';
               branchPrefix = 'fe/';
-            } else {
-              console.log("No BE/FE label detected — skipping.");
-              return;
             }
 
             const newBranchName = `${branchPrefix}issue-${issueNumber}-${issueTitle}`;
 
-            try {
-              // Get SHA of main in BE/FE repo
-              const { data: refData } = await github.rest.git.getRef({
-                owner,
-                repo: targetRepo,
-                ref: `heads/${baseBranch}`
-              });
+            // Get SHA of main
+            const refData = await github.rest.git.getRef({
+              owner,
+              repo: targetRepo,
+              ref: `heads/${baseBranch}`
+            });
 
-              const sha = refData.object.sha;
+            const sha = refData.data.object.sha;
 
-              // Create the branch
-              await github.rest.git.createRef({
-                owner,
-                repo: targetRepo,
-                ref: `refs/heads/${newBranchName}`,
-                sha
-              });
+            // Create branch
+            await github.rest.git.createRef({
+              owner,
+              repo: targetRepo,
+              ref: `refs/heads/${newBranchName}`,
+              sha
+            });
 
-              // Link branch to WF Issue (cross-repo allowed in Project V2)
-              await github.rest.repos.createOrUpdateIssueBranch({
-                owner,
-                repo: targetRepo,
-                issue_number: issueNumber,
-                head_branch: newBranchName
-              });
+            // Output for next step
+            core.setOutput('targetrepo', targetRepo);
+            core.setOutput('branchname', newBranchName);
+
+
+      ##########################################################
+      # STEP 2 — LINK BRANCH TO THE ISSUE
+      ##########################################################
+      - name: Link created branch to Issue
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GH_PAT }}
+          script: |
+            const owner = 'JulioQes';
+            const issueNumber = context.payload.issue.number;
+
+            const targetRepo = core.getInput('targetrepo', { required: false }) || process.env.INPUT_TARGETREPO;
+            const branchName = core.getInput('branchname', { required: false }) || process.env.INPUT_BRANCHNAME;
+
+            // Link branch → Issue (cross repo allowed due to Project V2)
+            await github.rest.repos.createOrUpdateIssueBranch({
+              owner,
+              repo: targetRepo,
+              issue_number: issueNumber,
+              head_branch: branchName
+            });
+
+            // Comment on Issue
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body:
+                '✅ **Branch created & linked automatically!**\n\n' +
+                `**Repository:** \`${owner}/${targetRepo}\`\n` +
+                `**Branch:** \`${branchName}\`\n\n` +
+                'This branch is now associated with this Issue under **Development**.'
+            });
+        env:
+          INPUT_TARGETREPO: ${{ steps.create_branch.outputs.targetrepo }}
+          INPUT_BRANCHNAME: ${{ steps.create_branch.outputs.branchname }}
